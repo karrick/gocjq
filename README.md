@@ -3,7 +3,7 @@ gocjq
 
 concurrent job queue for go
 
-## Example using input and output channels
+### Example using input and output channels
 
 ```Go
 type silly struct {
@@ -44,7 +44,7 @@ func main() {
 }
 ```
 
-## Example Using Enqueue() and Dequeue()
+### Example Using Enqueue() and Dequeue()
 
 ```Go
 type silly struct {
@@ -69,8 +69,7 @@ func main() {
 	defer queue.Quit()
 
 	go func() {
-		pre := &silly{a: 13, b: 42}
-		queue.Enqueue(pre)
+		queue.Enqueue(&silly{a: 13, b: 42})
 	}()
 
 	v := queue.Dequeue()
@@ -83,4 +82,3 @@ func main() {
     }
 }
 ```
-
