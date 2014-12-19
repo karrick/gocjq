@@ -21,8 +21,7 @@ func (self *silly) Multiply() {
 }
 
 func TestJobQueueWithoutJobQueueStages(t *testing.T) {
-	out := make(chan interface{})
-	queue, err := NewQueue(out)
+	queue, err := NewQueue()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,21 +40,19 @@ func TestJobQueueWithoutJobQueueStages(t *testing.T) {
 }
 
 func TestJobQueueStageInvalidWorkerCount(t *testing.T) {
-	out := make(chan interface{})
-	_, err := NewQueue(out, Stage(0, "Foo"))
+	_, err := NewQueue(Stage(0, "Foo"))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
 
-	_, err = NewQueue(out, Stage(-1, "Foo"))
+	_, err = NewQueue(Stage(-1, "Foo"))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
 }
 
-func TestJobQueueStagesInvokedInProperOrder(t *testing.T) {
-	out := make(chan interface{})
-	queue, err := NewQueue(out, Stage(3, "Add"), Stage(5, "Multiply"))
+func TestJobQueueStagesInvokedInProperOrderWithEnqueueAndDequeue(t *testing.T) {
+	queue, err := NewQueue(Stage(3, "Add"), Stage(5, "Multiply"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +64,27 @@ func TestJobQueueStagesInvokedInProperOrder(t *testing.T) {
 	}()
 
 	v := queue.Dequeue()
+	val := v.(*silly)
+	if val.a != (13+42)*42 {
+		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)
+	}
+	if val.err != nil {
+		t.Errorf("Actual: %#v; Expected: %#v", val.err, nil)
+	}
+}
+
+func TestJobQueueStagesInvokedInProperOrderWithInputAndOutput(t *testing.T) {
+	queue, err := NewQueue(Stage(3, "Add"), Stage(5, "Multiply"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer queue.Quit()
+
+	go func() {
+		queue.Input() <- &silly{a: 13, b: 42}
+	}()
+
+	v := <-queue.Output()
 	val := v.(*silly)
 	if val.a != (13+42)*42 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)

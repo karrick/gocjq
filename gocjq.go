@@ -12,6 +12,8 @@ import (
 type JobQueue interface {
 	Enqueue(interface{})
 	Dequeue() interface{}
+	Input() chan<- interface{}
+	Output() <-chan interface{}
 	Quit()
 }
 
@@ -31,9 +33,9 @@ type jobStage struct {
 // sent to the specified client output channel. Once the queue is no
 // longer needed, the client MUST call the Quit method to clean up the
 // channels.
-func NewQueue(clientOutput chan interface{}, setters ...JobQueueSetter) (JobQueue, error) {
+func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 	newJobQueue := &jobQueue{
-		output: clientOutput,
+		output: make(chan interface{}),
 		stages: make([]jobStage, 0),
 		done:   make(chan struct{}),
 	}
@@ -44,7 +46,7 @@ func NewQueue(clientOutput chan interface{}, setters ...JobQueueSetter) (JobQueu
 		}
 	}
 
-	output := clientOutput
+	output := newJobQueue.output
 
 	// NOTE: go in reverse to tie stage channels together
 	for si := len(newJobQueue.stages) - 1; si >= 0; si-- {
@@ -99,6 +101,16 @@ func (q *jobQueue) Enqueue(p interface{}) {
 // Dequeue takes the next completed job off the queue.
 func (q *jobQueue) Dequeue() interface{} {
 	return <-q.output
+}
+
+// Input returns the queue's input channel.
+func (q *jobQueue) Input() chan<- interface{} {
+	return q.input
+}
+
+// Output returns the queue's output channel.
+func (q *jobQueue) Output() <-chan interface{} {
+	return q.output
 }
 
 // Quit method is called by the client once the queue is no longer
