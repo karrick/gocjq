@@ -2,7 +2,7 @@ package gocjq
 
 import (
 	"fmt"
-	// "log"
+	"log"
 	"reflect"
 	"time"
 )
@@ -49,7 +49,7 @@ func Stage(setters ...StageSetter) JobQueueSetter {
 }
 
 func stageMonitor(stg *stage) {
-	// log.Print("[DEBUG] monitor spawn: ", stg.methodName)
+	log.Print("[DEBUG] monitor spawn: ", stg.methodName)
 
 	// NOTE: input and output channels, methodName, workerMin, and
 	// workerMax already set
@@ -81,11 +81,13 @@ monitorLoop:
 			// we have, not to exceed max
 			additional := stg.workerCount
 			if stg.workerCount+additional > stg.workerMax {
-				// log.Print("[DEBUG] reached maximum number of workers for: ", stg.methodName, stg.workerMax)
+				log.Printf("[DEBUG] reached maximum number of workers for: %s %d", stg.methodName, stg.workerMax)
 				additional = stg.workerMax - stg.workerCount
 			}
-			spawn(stg, additional)
-			stg.workerCount += additional
+			if additional > 0 {
+				spawn(stg, additional)
+				stg.workerCount += additional
+			}
 		case <-stg.terminate:
 			// log.Printf("[DEBUG] monitor terminate: %s", stg.methodName)
 			// NOTE: count backwards to prevent workerCount race
@@ -94,20 +96,20 @@ monitorLoop:
 				stg.terminateWorker <- struct{}{}
 			}
 		}
-		// log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
+		log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
 	}
-	// log.Print("[DEBUG] monitor finished: ", stg.methodName)
+	log.Print("[DEBUG] monitor finished: ", stg.methodName)
 	stg.finished <- struct{}{}
 }
 
 func spawn(stg *stage, count int) {
+	log.Printf("[DEBUG] worker spawn: %s; %d workers", stg.methodName, count)
 	for index := 0; index < count; index++ {
 		go worker(stg, stg.terminateWorker, stg.workerExitted)
 	}
 }
 
 func worker(stg *stage, terminate <-chan struct{}, finished chan<- struct{}) {
-	// log.Print("[DEBUG] worker spawn: ", stg.methodName)
 	var input <-chan interface{} = stg.input // narrowing cast
 
 workerLoop:
@@ -132,7 +134,7 @@ workerLoop:
 			stg.workerIdle <- struct{}{}
 		}
 	}
-	// log.Print("[DEBUG] worker finished: ", stg.methodName)
+	log.Print("[DEBUG] worker finished: ", stg.methodName)
 	finished <- struct{}{}
 }
 
