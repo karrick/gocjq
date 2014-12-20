@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	workerIdleTimeout = time.Minute
+)
+
 type stage struct {
 	input                             chan interface{}
 	output                            chan<- interface{}
@@ -19,26 +23,25 @@ type stage struct {
 }
 
 // Stage is used during job queue creation time to append a job stage
-// to the job queue. The client specifies the number of workers that
-// should work on this stage, and the name of the method to invoke on
-// the job type.
+// to the job queue. The client specifies the name of the method to
+// invoke on the job type, and optionally specifies the minimum and
+// maximum number of workers that should work on this stage. The
+// default minimum is 1, and the default maximum is 16 times the
+// actual minimum.
 func Stage(setters ...StageSetter) JobQueueSetter {
 	return func(q *jobQueue) error {
 		if q.input != nil {
 			return fmt.Errorf("stage cannot be created after queue")
 		}
-		stg := &stage{}
+		stg := &stage{workerMin: 1}
 		for _, setter := range setters {
 			err := setter(stg)
 			if err != nil {
 				return err
 			}
 		}
-		if stg.workerMin == 0 {
-			stg.workerMin = 1
-		}
 		if stg.workerMax == 0 {
-			stg.workerMax = 64 * stg.workerMin
+			stg.workerMax = 16 * stg.workerMin
 		}
 		if stg.workerMax < stg.workerMin {
 			return fmt.Errorf("stage minimum workers ought to be less than or equal to maximum workers")
@@ -65,26 +68,28 @@ monitorLoop:
 	for {
 		select {
 		case <-stg.workerExitted:
+			// log.Printf("[DEBUG] worker exitted: %s", stg.methodName)
 			stg.workerCount--
-			// log.Printf("[DEBUG] worker exitted: %s; %d remaining", stg.methodName, stg.workerCount)
 			if stg.workerCount <= 0 {
 				break monitorLoop
 			}
 		case <-stg.workerIdle:
-			// log.Print("[DEBUG] idle: ", stg.methodName)
 			if stg.workerCount > stg.workerMin {
+				log.Print("[DEBUG] %s idle", stg.methodName)
 				stg.terminateWorker <- struct{}{}
+			} else {
+				log.Printf("[DEBUG] %s idle; at minimum number of workers: %d", stg.methodName, stg.workerMin)
 			}
-		case <-time.After(time.Minute):
-			// log.Print("[DEBUG] busy: ", stg.methodName)
+		case <-time.After(workerIdleTimeout * 2):
 			// no workers idle after a minute; double what
 			// we have, not to exceed max
 			additional := stg.workerCount
 			if stg.workerCount+additional > stg.workerMax {
-				log.Printf("[DEBUG] reached maximum number of workers for: %s %d", stg.methodName, stg.workerMax)
+				log.Printf("[DEBUG] %s busy; at maximum number of workers: %d", stg.methodName, stg.workerMax)
 				additional = stg.workerMax - stg.workerCount
 			}
 			if additional > 0 {
+				log.Printf("[DEBUG] %s busy", stg.methodName)
 				spawn(stg, additional)
 				stg.workerCount += additional
 			}
@@ -103,7 +108,7 @@ monitorLoop:
 }
 
 func spawn(stg *stage, count int) {
-	log.Printf("[DEBUG] worker spawn: %s; %d workers", stg.methodName, count)
+	log.Printf("[DEBUG] %s worker spawn: %d workers", stg.methodName, count)
 	for index := 0; index < count; index++ {
 		go worker(stg, stg.terminateWorker, stg.workerExitted)
 	}

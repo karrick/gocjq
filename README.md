@@ -48,8 +48,10 @@ func (self *silly) Divide() {
 }
 
 func main() {
-    // create 4 dividers and 1 adder
-    queue, err := gocjq.NewQueue(gocjq.Stage(4, "Divide"), gocjq.Stage(1, "Add"))
+    queue, err := gocjq.NewQueue(
+        gocjq.Stage(gocjq.Method("Divide"), gocjq.Min(4), gocjq.Max(64)),
+        gocjq.Stage(gocjq.Method("Add"), gocjq.Min(32)),
+        gocjq.Stage(gocjq.Method("Print"), gocjq.Min(2)))
     if err != nil {
         log.Fatal(err)
     }
@@ -111,11 +113,10 @@ func (self *silly) Print() {
 }
 
 func main() {
-    // create 4 dividers, 1 adder, and 3 printers
     queue, err := gocjq.NewQueue(
-        gocjq.Stage(4, "Divide"),
-        gocjq.Stage(1, "Add"),
-        gocjq.Stage(3, "Print"),
+        gocjq.Stage(gocjq.Method("Divide"), gocjq.Min(4)),
+        gocjq.Stage(gocjq.Method("Add")),
+        gocjq.Stage(gocjq.Method("Print"), gocjq.Min(2)),
         gocjq.OutputSump())
     if err != nil {
         log.Fatal(err)
