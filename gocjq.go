@@ -20,6 +20,7 @@ type JobQueue interface {
 type jobQueue struct {
 	input, output chan interface{}
 	stages        []jobStage
+	sump          bool
 	done          chan struct{}
 }
 
@@ -47,6 +48,15 @@ func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 
 	if newJobQueue.output == nil {
 		newJobQueue.output = make(chan interface{})
+		if newJobQueue.sump {
+			go func(c <-chan interface{}) {
+				for _ = range c {
+					// drop it
+				}
+			}(newJobQueue.output)
+		}
+	} else if newJobQueue.sump {
+		return nil, fmt.Errorf("ought not have sump and output channel")
 	}
 	output := newJobQueue.output
 
@@ -140,6 +150,26 @@ func Stage(howManyWorkers int, methodName string) JobQueueSetter {
 			return fmt.Errorf("stage ought to have at least one worker")
 		}
 		q.stages = append(q.stages, jobStage{howManyWorkers: howManyWorkers, methodName: methodName})
+		return nil
+	}
+}
+
+// OutputSump creates a queue that discards jobs after
+// completetion. This is used when one of the job stages performs a
+// desired side effect.
+func OutputSump() JobQueueSetter {
+	return func(q *jobQueue) error {
+		q.sump = true
+		return nil
+	}
+}
+
+func Output(out chan interface{}) JobQueueSetter {
+	return func(q *jobQueue) error {
+		if out == nil {
+			return fmt.Errorf("channel ought be valid")
+		}
+		q.output = out
 		return nil
 	}
 }
