@@ -7,16 +7,16 @@ import (
 
 ////////////////////////////////////////
 
-type silly struct {
+type someJobType struct {
 	a, b int
 	err  error
 }
 
-func (self *silly) Add() {
+func (self *someJobType) Add() {
 	self.a += self.b
 }
 
-func (self *silly) Multiply() {
+func (self *someJobType) Multiply() {
 	self.a *= self.b
 }
 
@@ -24,11 +24,11 @@ var (
 	result int
 )
 
-func (self *silly) Result() {
+func (self *someJobType) Result() {
 	result = self.a
 }
 
-func TestJobQueueOutputNil(t *testing.T) {
+func TestOutputNil(t *testing.T) {
 	_, err := NewQueue(Output(nil))
 	expected := "channel ought be valid"
 	if err == nil || !strings.Contains(err.Error(), expected) {
@@ -36,7 +36,7 @@ func TestJobQueueOutputNil(t *testing.T) {
 	}
 }
 
-func TestJobQueueOutputSumpWithQueueFails(t *testing.T) {
+func TestOutputSumpWithQueueFails(t *testing.T) {
 	_, err := NewQueue(OutputSump(), Output(make(chan interface{})))
 	expected := "ought not have sump and output channel"
 	if err == nil || !strings.Contains(err.Error(), expected) {
@@ -44,7 +44,7 @@ func TestJobQueueOutputSumpWithQueueFails(t *testing.T) {
 	}
 }
 
-func TestJobQueueWithoutJobQueueStages(t *testing.T) {
+func TestWithoutStages(t *testing.T) {
 	queue, err := NewQueue()
 	if err != nil {
 		t.Fatal(err)
@@ -52,42 +52,43 @@ func TestJobQueueWithoutJobQueueStages(t *testing.T) {
 	defer queue.Quit()
 
 	go func() {
-		queue.Enqueue(&silly{})
+		queue.Enqueue(&someJobType{a: 5})
 	}()
 
 	v := queue.Dequeue()
-	val := v.(*silly)
-	if val.err != nil {
-		t.Errorf("Actual: %#v; Expected: %#v", val.err, nil)
+	val := v.(*someJobType)
+	if val.a != 5 {
+		t.Errorf("Actual: %#v; Expected: %#v", val.a, 5)
 	}
 }
 
-func TestJobQueueStageInvalidWorkerCount(t *testing.T) {
-	_, err := NewQueue(Stage(0, "Foo"))
+func TestStageInvalidWorkerCount(t *testing.T) {
+	_, err := NewQueue(Stage(Min(0), Method("Foo")))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
 
-	_, err = NewQueue(Stage(-1, "Foo"))
+	_, err = NewQueue(Stage(Min(-1), Method("Foo")))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
 }
 
-func TestJobQueueStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
-	queue, err := NewQueue(Stage(3, "Add"), Stage(5, "Multiply"))
+func TestStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
+	queue, err := NewQueue(
+		Stage(Min(20), Method("Add")),
+		Stage(Min(1000), Method("Multiply")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer queue.Quit()
 
 	go func() {
-		pre := &silly{a: 13, b: 42}
-		queue.Enqueue(pre)
+		queue.Enqueue(&someJobType{a: 13, b: 42})
 	}()
 
 	v := queue.Dequeue()
-	val := v.(*silly)
+	val := v.(*someJobType)
 	if val.a != (13+42)*42 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)
 	}
@@ -96,19 +97,21 @@ func TestJobQueueStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) 
 	}
 }
 
-func TestJobQueueStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
-	queue, err := NewQueue(Stage(3, "Add"), Stage(5, "Multiply"))
+func TestStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
+	queue, err := NewQueue(
+		Stage(Min(2), Method("Add")),
+		Stage(Min(1), Method("Multiply")))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer queue.Quit()
 
 	go func() {
-		queue.Input() <- &silly{a: 13, b: 42}
+		queue.Input() <- &someJobType{a: 13, b: 42}
 	}()
 
 	v := <-queue.Output()
-	val := v.(*silly)
+	val := v.(*someJobType)
 	if val.a != (13+42)*42 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)
 	}
@@ -117,8 +120,11 @@ func TestJobQueueStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
 	}
 }
 
-func TestJobQueueOutputSump(t *testing.T) {
-	queue, err := NewQueue(Stage(3, "Add"), OutputSump(), Stage(5, "Result"))
+func TestOutputSump(t *testing.T) {
+	queue, err := NewQueue(
+		Stage(Min(3), Method("Add")),
+		Stage(Min(5), Method("Result")),
+		OutputSump())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +132,7 @@ func TestJobQueueOutputSump(t *testing.T) {
 	jobSent := make(chan struct{})
 	result = 0
 	go func() {
-		queue.Input() <- &silly{a: 13, b: 42}
+		queue.Input() <- &someJobType{a: 13, b: 42}
 		jobSent <- struct{}{}
 	}()
 

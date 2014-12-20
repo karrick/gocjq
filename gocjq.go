@@ -2,7 +2,6 @@ package gocjq
 
 import (
 	"fmt"
-	"reflect"
 )
 
 ////////////////////////////////////////
@@ -18,26 +17,21 @@ type JobQueue interface {
 }
 
 type jobQueue struct {
-	input, output chan interface{}
-	stages        []jobStage
-	sump          bool
-	done          chan struct{}
-}
-
-type jobStage struct {
-	howManyWorkers int
-	methodName     string
+	input, output       chan interface{}
+	stages              []*stage
+	sump                bool
+	terminate, finished chan struct{}
 }
 
 // NewQueue creates a job queue. New jobs are enqueued with its
 // Enqueue method, are processed by the specified job stages, then
-// sent to the specified client output channel. Once the queue is no
+// sent to the client output channel if specified. Once the queue is no
 // longer needed, the client MUST call the Quit method to clean up the
 // channels.
 func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 	newJobQueue := &jobQueue{
-		stages: make([]jobStage, 0),
-		done:   make(chan struct{}),
+		stages:   make([]*stage, 0),
+		finished: make(chan struct{}),
 	}
 	for _, setter := range setters {
 		err := setter(newJobQueue)
@@ -45,7 +39,6 @@ func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 			return nil, err
 		}
 	}
-
 	if newJobQueue.output == nil {
 		newJobQueue.output = make(chan interface{})
 		if newJobQueue.sump {
@@ -58,56 +51,36 @@ func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 	} else if newJobQueue.sump {
 		return nil, fmt.Errorf("ought not have sump and output channel")
 	}
-	output := newJobQueue.output
 
 	// NOTE: go in reverse to tie stage channels together
+	nextOutput := newJobQueue.output
+	nextFinished := newJobQueue.finished
 	for si := len(newJobQueue.stages) - 1; si >= 0; si-- {
-		input := make(chan interface{})
+		thisInput := make(chan interface{})
+		thisTerminate := make(chan struct{})
 
-		// NOTE: must pass these into go routine for binding
-		go func(si int, input, output chan interface{}) {
-			thisStage := newJobQueue.stages[si]
-			hmw := thisStage.howManyWorkers
-			methodName := thisStage.methodName
-			done := make(chan struct{})
+		stg := newJobQueue.stages[si]
+		stg.input = thisInput
+		stg.terminate = thisTerminate
+		stg.output = nextOutput
+		stg.finished = nextFinished
 
-			// spin off stage processors
-			for index := 0; index < hmw; index++ {
-				go func() {
-					for datum := range input {
-						datumType := reflect.TypeOf(datum)
-						method, ok := datumType.MethodByName(methodName)
-						if !ok {
-							panic(fmt.Errorf("%T has no method %v", datum, methodName))
-						}
-						values := make([]reflect.Value, 1)
-						values[0] = reflect.ValueOf(datum)
-						method.Func.Call(values)
-						output <- datum
-					}
-					done <- struct{}{}
-				}()
-			}
-			// wait until all stage processors are complete
-			for index := 0; index < hmw; index++ {
-				<-done
-			}
-			close(output)
-			if si == 0 {
-				// the last stage to finish tells the queue that we're done
-				newJobQueue.done <- struct{}{}
-			}
-		}(si, input, output)
-
-		output = input
+		nextOutput = thisInput
+		nextFinished = thisTerminate
 	}
-	newJobQueue.input = output
+	// spawn up the stage monitors
+	for _, stg := range newJobQueue.stages {
+		go stageMonitor(stg)
+	}
+
+	newJobQueue.input = nextOutput
+	newJobQueue.terminate = nextFinished
 	return newJobQueue, nil
 }
 
 // Enqueue adds a job to the tail of the job queue.
-func (q *jobQueue) Enqueue(p interface{}) {
-	q.input <- p
+func (q *jobQueue) Enqueue(datum interface{}) {
+	q.input <- datum
 }
 
 // Dequeue takes the next completed job off the queue.
@@ -129,30 +102,17 @@ func (q *jobQueue) Output() <-chan interface{} {
 // needed, to clean up the channels. The Quit method closes the client
 // output channel specified when the queue was created.
 func (q *jobQueue) Quit() {
-	close(q.input)
 	if len(q.stages) > 0 {
-		<-q.done
+		q.terminate <- struct{}{}
+		<-q.finished
+		for _, stg := range q.stages {
+			close(stg.input)
+		}
 	}
+	close(q.output)
 }
 
 type JobQueueSetter func(*jobQueue) error
-
-// Stage is used during job queue creation time to append a job stage
-// to the job queue. The client specifies the number of workers that
-// should work on this stage, and the name of the method to invoke on
-// the job type.
-func Stage(howManyWorkers int, methodName string) JobQueueSetter {
-	return func(q *jobQueue) error {
-		if q.input != nil {
-			return fmt.Errorf("stage cannot be created after queue")
-		}
-		if howManyWorkers <= 0 {
-			return fmt.Errorf("stage ought to have at least one worker")
-		}
-		q.stages = append(q.stages, jobStage{howManyWorkers: howManyWorkers, methodName: methodName})
-		return nil
-	}
-}
 
 // OutputSump creates a queue that discards jobs after
 // completetion. This is used when one of the job stages performs a
