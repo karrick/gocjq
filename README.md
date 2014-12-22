@@ -50,8 +50,7 @@ func (self *someJob) Divide() {
 func main() {
     queue, err := gocjq.NewQueue(
         gocjq.Stage(gocjq.Method("Divide"), gocjq.Min(4), gocjq.Max(64)),
-        gocjq.Stage(gocjq.Method("Add"), gocjq.Min(32)),
-        gocjq.Stage(gocjq.Method("Print"), gocjq.Min(2)))
+        gocjq.Stage(gocjq.Method("Add"), gocjq.Min(32)))
     if err != nil {
         log.Fatal(err)
     }

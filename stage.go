@@ -12,22 +12,21 @@ const (
 )
 
 type stage struct {
-	input                             chan interface{}
-	output                            chan<- interface{}
-	methodName                        string
-	terminate                         <-chan struct{}
-	finished                          chan<- struct{}
-	workerCount, workerMin, workerMax int
-
+	methodName                                 string
+	input                                      chan interface{}
+	output                                     chan<- interface{}
+	terminate                                  <-chan struct{}
+	finished                                   chan<- struct{}
 	workerIdle, terminateWorker, workerExitted chan struct{}
+	workerCount, workerMin, workerMax          int
 }
 
-// Stage is used during job queue creation time to append a job stage
-// to the job queue. The client specifies the name of the method to
-// invoke on the job type, and optionally specifies the minimum and
-// maximum number of workers that should work on this stage. The
-// default minimum is 1, and the default maximum is 16 times the
-// actual minimum.
+// Stage is a job queue configuration function that appends a job
+// stage to the newly created job queue. The client specifies the name
+// of the method to invoke on the job type, and optionally specifies
+// the minimum and maximum number of workers that should work on this
+// stage. The default minimum is 1, and the default maximum is 16
+// times the actual minimum.
 func Stage(setters ...StageSetter) JobQueueSetter {
 	return func(q *jobQueue) error {
 		if q.input != nil {
@@ -143,8 +142,17 @@ workerLoop:
 	finished <- struct{}{}
 }
 
+// StageSetter type defines functions that modify a newly created job
+// stage with various configuration settings. Each stage must have a
+// method, and optionally one or both of the Min and Max number of
+// workers set. Each stage's configuration is independent of the
+// configuration for other stages. In other words, one stage may have
+// a minimum of 10 and a maximum of 20 workers, but another stage may
+// have a minimum of 50 and a maximum of 200 workers.
 type StageSetter func(*stage) error
 
+// Method is a stage configuration function that specifies the name of
+// the method to be invoked on the job structure to be processed.
 func Method(name string) StageSetter {
 	return func(stg *stage) error {
 		if name == "" {
@@ -155,6 +163,10 @@ func Method(name string) StageSetter {
 	}
 }
 
+// Max is a stage configuration function that specifies the maximum
+// number of workers to be simultaneously processing jobs for the
+// respective job stage. The default is to have one worker for a
+// stage.
 func Max(count int) StageSetter {
 	return func(stg *stage) error {
 		if count <= 0 {
@@ -165,6 +177,10 @@ func Max(count int) StageSetter {
 	}
 }
 
+// Min is a stage configuration function that specifies the minimum
+// number of workers to be simultaneously processing jobs for the
+// respective job stage. The default is to allow up to 16 times the
+// actual minimum number of workers for a stage.
 func Min(count int) StageSetter {
 	return func(stg *stage) error {
 		if count <= 0 {
