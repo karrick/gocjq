@@ -89,33 +89,10 @@ func TestStageInvalidWorkerCount(t *testing.T) {
 	}
 }
 
-func TestStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
-	queue, err := NewQueue(
-		Stage(Method("Multiply"), Min(100)),
-		Stage(Method("Add"), Min(20)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer queue.Quit()
-
-	go func() {
-		queue.Input() <- &someJob{a: 13, b: 42}
-	}()
-
-	v := <-queue.Output()
-	val := v.(*someJob)
-	if val.a != (13*42)+42 {
-		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13*42)+42)
-	}
-	if val.err != nil {
-		t.Errorf("Actual: %#v; Expected: %#v", val.err, nil)
-	}
-}
-
 func TestStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
 	queue, err := NewQueue(
-		Stage(Method("Add"), Min(2)),
-		Stage(Method("Multiply"), Min(1)))
+		Stage(Method("Add"), Min(20)),
+		Stage(Method("Multiply"), Min(100)))
 	if err != nil {
 		t.Fatal(err)
 	}

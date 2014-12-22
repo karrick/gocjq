@@ -9,8 +9,6 @@ import (
 // JobQueue allows enqueuing and dequeueing of jobs. The caller MUST
 // invoke Quit method when the queue is no longer needed.
 type JobQueue interface {
-	// Enqueue(interface{})
-	// Dequeue() interface{}
 	Input() chan<- interface{}
 	Output() <-chan interface{}
 	Quit()
