@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	workerIdleTimeout = time.Minute
+	workerIdleTimeout    = time.Minute / 4
+	defaultMaxToMinRatio = 16
 )
 
 type stage struct {
@@ -40,7 +41,7 @@ func Stage(setters ...StageSetter) JobQueueSetter {
 			}
 		}
 		if stg.workerMax == 0 {
-			stg.workerMax = 16 * stg.workerMin
+			stg.workerMax = defaultMaxToMinRatio * stg.workerMin
 		}
 		if stg.workerMax < stg.workerMin {
 			return fmt.Errorf("stage minimum workers ought to be less than or equal to maximum workers")
@@ -100,7 +101,7 @@ monitorLoop:
 				stg.terminateWorker <- struct{}{}
 			}
 		}
-		// log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
+		log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
 	}
 	// log.Print("[DEBUG] monitor finished: ", stg.methodName)
 	stg.finished <- struct{}{}
@@ -133,7 +134,7 @@ workerLoop:
 		case <-terminate:
 			// log.Print("[DEBUG] worker terminate: ", stg.methodName)
 			break workerLoop
-		case <-time.After(time.Minute):
+		case <-time.After(workerIdleTimeout):
 			// log.Print("[DEBUG] worker idle: ", stg.methodName)
 			stg.workerIdle <- struct{}{}
 		}
