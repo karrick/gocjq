@@ -2,7 +2,7 @@ package gocjq
 
 import (
 	"fmt"
-	// "log"
+	"log"
 	"reflect"
 	"time"
 )
@@ -77,18 +77,18 @@ monitorLoop:
 				// log.Print("[DEBUG] %s idle", stg.methodName)
 				stg.terminateWorker <- struct{}{}
 			} else {
-				// log.Printf("[DEBUG] %s idle; at minimum number of workers: %d", stg.methodName, stg.workerMin)
+				log.Printf("[DEBUG] %s idle; at minimum number of workers: %d", stg.methodName, stg.workerMin)
 			}
 		case <-time.After(workerIdleTimeout * 2):
 			// no workers idle after a minute; double what
 			// we have, not to exceed max
 			additional := stg.workerCount
 			if stg.workerCount+additional > stg.workerMax {
-				// log.Printf("[DEBUG] %s busy; at maximum number of workers: %d", stg.methodName, stg.workerMax)
+				log.Printf("[DEBUG] %s busy; at maximum number of workers: %d", stg.methodName, stg.workerMax)
 				additional = stg.workerMax - stg.workerCount
 			}
 			if additional > 0 {
-				// log.Printf("[DEBUG] %s busy", stg.methodName)
+				log.Printf("[DEBUG] %s busy", stg.methodName)
 				spawn(stg, additional)
 				stg.workerCount += additional
 			}
