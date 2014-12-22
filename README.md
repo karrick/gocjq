@@ -7,11 +7,11 @@ concurrent job queue for go
 
 It is often convenient to partition a job into multiple steps, and
 have them run concurrently, like a car factory might have different
-stages of manufactoring production.
+stages in a manufactoring facility.
 
 It is also convenient to specify how many workers are desired at each
-stage of the process. You might need three adders but 5 multipliers,
-because multiplying takes more time, as a silly example.
+stage of the process. For one stage you may need 5 workers, but for
+another stage you may want between 25 and 50.
 
 This library, go concurent job queues, gocjq, makes setting up these
 sort of examples quite easy. There are two interfaces, namely an

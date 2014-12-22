@@ -9,8 +9,8 @@ import (
 // JobQueue allows enqueuing and dequeueing of jobs. The caller MUST
 // invoke Quit method when the queue is no longer needed.
 type JobQueue interface {
-	Enqueue(interface{})
-	Dequeue() interface{}
+	// Enqueue(interface{})
+	// Dequeue() interface{}
 	Input() chan<- interface{}
 	Output() <-chan interface{}
 	Quit()
@@ -19,13 +19,16 @@ type JobQueue interface {
 type jobQueue struct {
 	input, output       chan interface{}
 	stages              []*stage
-	sump                bool
 	terminate, finished chan struct{}
 }
 
-// NewQueue creates a job queue. New jobs are enqueued with its
-// Enqueue method, are processed by the specified job stages, then
-// sent to the client output channel if specified. Once the queue is no
+// NewQueue creates a job queue. New jobs are enqueued by sending a
+// job to the channel returned by the queue's Input method. Jobs are
+// processed by the specified job stages, then sent to the queue's
+// output channel. If no output channel is specified, one will be
+// created by NewQueue. If no output channel is desired, the
+// OutputSump method is used to create a drain that will loop over the
+// queue's output channel after completion. Once the queue is no
 // longer needed, the client MUST call the Quit method to clean up the
 // channels.
 func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
@@ -41,15 +44,6 @@ func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 	}
 	if newJobQueue.output == nil {
 		newJobQueue.output = make(chan interface{})
-		if newJobQueue.sump {
-			go func(c <-chan interface{}) {
-				for _ = range c {
-					// drop it
-				}
-			}(newJobQueue.output)
-		}
-	} else if newJobQueue.sump {
-		return nil, fmt.Errorf("ought not have sump and output channel")
 	}
 
 	// NOTE: go in reverse to tie stage channels together
@@ -78,16 +72,6 @@ func NewQueue(setters ...JobQueueSetter) (JobQueue, error) {
 	return newJobQueue, nil
 }
 
-// Enqueue adds a job to the tail of the job queue.
-func (q *jobQueue) Enqueue(datum interface{}) {
-	q.input <- datum
-}
-
-// Dequeue takes the next completed job off the queue.
-func (q *jobQueue) Dequeue() interface{} {
-	return <-q.output
-}
-
 // Input returns the queue's input channel.
 func (q *jobQueue) Input() chan<- interface{} {
 	return q.input
@@ -98,9 +82,10 @@ func (q *jobQueue) Output() <-chan interface{} {
 	return q.output
 }
 
-// Quit method is called by the client once the queue is no longer
-// needed, to clean up the channels. The Quit method closes the client
-// output channel specified when the queue was created.
+// Quit is called by the client once the queue is no longer needed to
+// clean up the channels. The Quit method closes the output channel,
+// including when the client specifies an output channel using the
+// Output method durng queue creation.
 func (q *jobQueue) Quit() {
 	if len(q.stages) > 0 {
 		q.terminate <- struct{}{}
@@ -114,22 +99,38 @@ func (q *jobQueue) Quit() {
 
 type JobQueueSetter func(*jobQueue) error
 
-// OutputSump creates a queue that discards jobs after
-// completetion. This is used when one of the job stages performs a
-// desired side effect.
-func OutputSump() JobQueueSetter {
-	return func(q *jobQueue) error {
-		q.sump = true
-		return nil
-	}
-}
-
+// Output allows the client to specify a channel to send the completed
+// jobs to. Failing to receive jobs from this channel will have the
+// effect of halting the job queue once all the channels are full.
 func Output(out chan interface{}) JobQueueSetter {
 	return func(q *jobQueue) error {
+		if q.output != nil {
+			return fmt.Errorf("output channel already specified; was a sump created?")
+		}
 		if out == nil {
 			return fmt.Errorf("channel ought be valid")
 		}
 		q.output = out
+		return nil
+	}
+}
+
+// OutputSump creates a queue that discards jobs after
+// completetion. This is used when one of the job stages performs a
+// desired side effect. Because completed jobs are discarded by the
+// library, there is no need for client removal of completed jobs from
+// the job queue.
+func OutputSump() JobQueueSetter {
+	return func(q *jobQueue) error {
+		if q.output != nil {
+			return fmt.Errorf("output channel already specified")
+		}
+		q.output = make(chan interface{})
+		go func(c <-chan interface{}) {
+			for _ = range c {
+				// drop it
+			}
+		}(q.output)
 		return nil
 	}
 }

@@ -53,7 +53,7 @@ func TestOutputNil(t *testing.T) {
 
 func TestOutputSumpWithQueueFails(t *testing.T) {
 	_, err := NewQueue(OutputSump(), Output(make(chan interface{})))
-	expected := "ought not have sump and output channel"
+	expected := "output channel already specified"
 	if err == nil || !strings.Contains(err.Error(), expected) {
 		t.Errorf("Actual: %#v; Expected: %#v", err, expected)
 	}
@@ -67,10 +67,10 @@ func TestWithoutStages(t *testing.T) {
 	defer queue.Quit()
 
 	go func() {
-		queue.Enqueue(&someJob{a: 5})
+		queue.Input() <- &someJob{a: 5}
 	}()
 
-	v := queue.Dequeue()
+	v := <-queue.Output()
 	val := v.(*someJob)
 	if val.a != 5 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, 5)
@@ -99,10 +99,10 @@ func TestStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
 	defer queue.Quit()
 
 	go func() {
-		queue.Enqueue(&someJob{a: 13, b: 42})
+		queue.Input() <- &someJob{a: 13, b: 42}
 	}()
 
-	v := queue.Dequeue()
+	v := <-queue.Output()
 	val := v.(*someJob)
 	if val.a != (13*42)+42 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13*42)+42)
