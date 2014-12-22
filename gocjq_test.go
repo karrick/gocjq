@@ -1,30 +1,45 @@
 package gocjq
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
 ////////////////////////////////////////
 
-type someJobType struct {
-	a, b int
+type someJob struct {
+	a, b float64
 	err  error
 }
 
-func (self *someJobType) Add() {
-	self.a += self.b
+func (self *someJob) Add() {
+	if self.err == nil {
+		self.a += self.b
+	}
 }
 
-func (self *someJobType) Multiply() {
-	self.a *= self.b
+func (self *someJob) Divide() {
+	if self.err == nil {
+		if self.b != 0 {
+			self.err = fmt.Errorf("divide by zero")
+		} else {
+			self.a /= self.b
+		}
+	}
+}
+
+func (self *someJob) Multiply() {
+	if self.err == nil {
+		self.a *= self.b
+	}
 }
 
 var (
-	result int
+	result float64
 )
 
-func (self *someJobType) Result() {
+func (self *someJob) Result() {
 	result = self.a
 }
 
@@ -52,23 +67,23 @@ func TestWithoutStages(t *testing.T) {
 	defer queue.Quit()
 
 	go func() {
-		queue.Enqueue(&someJobType{a: 5})
+		queue.Enqueue(&someJob{a: 5})
 	}()
 
 	v := queue.Dequeue()
-	val := v.(*someJobType)
+	val := v.(*someJob)
 	if val.a != 5 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, 5)
 	}
 }
 
 func TestStageInvalidWorkerCount(t *testing.T) {
-	_, err := NewQueue(Stage(Min(0), Method("Foo")))
+	_, err := NewQueue(Stage(Method("Foo"), Min(0)))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
 
-	_, err = NewQueue(Stage(Min(-1), Method("Foo")))
+	_, err = NewQueue(Stage(Method("Foo"), Min(-1)))
 	if err == nil || !strings.Contains(err.Error(), "ought to have at least one worker") {
 		t.Errorf("Actual: %#v; Expected: %#v", err, "ought to have at least one worker")
 	}
@@ -76,21 +91,21 @@ func TestStageInvalidWorkerCount(t *testing.T) {
 
 func TestStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
 	queue, err := NewQueue(
-		Stage(Min(20), Method("Add")),
-		Stage(Min(1000), Method("Multiply")))
+		Stage(Method("Multiply"), Min(100)),
+		Stage(Method("Add"), Min(20)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer queue.Quit()
 
 	go func() {
-		queue.Enqueue(&someJobType{a: 13, b: 42})
+		queue.Enqueue(&someJob{a: 13, b: 42})
 	}()
 
 	v := queue.Dequeue()
-	val := v.(*someJobType)
-	if val.a != (13+42)*42 {
-		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)
+	val := v.(*someJob)
+	if val.a != (13*42)+42 {
+		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13*42)+42)
 	}
 	if val.err != nil {
 		t.Errorf("Actual: %#v; Expected: %#v", val.err, nil)
@@ -99,19 +114,19 @@ func TestStagesInvokedInProperOrderUsingEnqueueAndDequeue(t *testing.T) {
 
 func TestStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
 	queue, err := NewQueue(
-		Stage(Min(2), Method("Add")),
-		Stage(Min(1), Method("Multiply")))
+		Stage(Method("Add"), Min(2)),
+		Stage(Method("Multiply"), Min(1)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer queue.Quit()
 
 	go func() {
-		queue.Input() <- &someJobType{a: 13, b: 42}
+		queue.Input() <- &someJob{a: 13, b: 42}
 	}()
 
 	v := <-queue.Output()
-	val := v.(*someJobType)
+	val := v.(*someJob)
 	if val.a != (13+42)*42 {
 		t.Errorf("Actual: %#v; Expected: %#v", val.a, (13+42)*42)
 	}
@@ -122,8 +137,8 @@ func TestStagesInvokedInProperOrderUsingInputAndOutput(t *testing.T) {
 
 func TestOutputSump(t *testing.T) {
 	queue, err := NewQueue(
-		Stage(Min(3), Method("Add")),
-		Stage(Min(5), Method("Result")),
+		Stage(Method("Add"), Min(3)),
+		Stage(Method("Result"), Min(5)),
 		OutputSump())
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +147,7 @@ func TestOutputSump(t *testing.T) {
 	jobSent := make(chan struct{})
 	result = 0
 	go func() {
-		queue.Input() <- &someJobType{a: 13, b: 42}
+		queue.Input() <- &someJob{a: 13, b: 42}
 		jobSent <- struct{}{}
 	}()
 

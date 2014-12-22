@@ -2,7 +2,7 @@ package gocjq
 
 import (
 	"fmt"
-	"log"
+	// "log"
 	"reflect"
 	"time"
 )
@@ -52,7 +52,7 @@ func Stage(setters ...StageSetter) JobQueueSetter {
 }
 
 func stageMonitor(stg *stage) {
-	log.Print("[DEBUG] monitor spawn: ", stg.methodName)
+	// log.Print("[DEBUG] monitor spawn: ", stg.methodName)
 
 	// NOTE: input and output channels, methodName, workerMin, and
 	// workerMax already set
@@ -75,21 +75,21 @@ monitorLoop:
 			}
 		case <-stg.workerIdle:
 			if stg.workerCount > stg.workerMin {
-				log.Print("[DEBUG] %s idle", stg.methodName)
+				// log.Print("[DEBUG] %s idle", stg.methodName)
 				stg.terminateWorker <- struct{}{}
 			} else {
-				log.Printf("[DEBUG] %s idle; at minimum number of workers: %d", stg.methodName, stg.workerMin)
+				// log.Printf("[DEBUG] %s idle; at minimum number of workers: %d", stg.methodName, stg.workerMin)
 			}
 		case <-time.After(workerIdleTimeout * 2):
 			// no workers idle after a minute; double what
 			// we have, not to exceed max
 			additional := stg.workerCount
 			if stg.workerCount+additional > stg.workerMax {
-				log.Printf("[DEBUG] %s busy; at maximum number of workers: %d", stg.methodName, stg.workerMax)
+				// log.Printf("[DEBUG] %s busy; at maximum number of workers: %d", stg.methodName, stg.workerMax)
 				additional = stg.workerMax - stg.workerCount
 			}
 			if additional > 0 {
-				log.Printf("[DEBUG] %s busy", stg.methodName)
+				// log.Printf("[DEBUG] %s busy", stg.methodName)
 				spawn(stg, additional)
 				stg.workerCount += additional
 			}
@@ -101,14 +101,14 @@ monitorLoop:
 				stg.terminateWorker <- struct{}{}
 			}
 		}
-		log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
+		// log.Printf("[DEBUG] monitor %s has %d workers", stg.methodName, stg.workerCount)
 	}
-	log.Print("[DEBUG] monitor finished: ", stg.methodName)
+	// log.Print("[DEBUG] monitor finished: ", stg.methodName)
 	stg.finished <- struct{}{}
 }
 
 func spawn(stg *stage, count int) {
-	log.Printf("[DEBUG] %s worker spawn: %d workers", stg.methodName, count)
+	// log.Printf("[DEBUG] %s worker spawn: %d workers", stg.methodName, count)
 	for index := 0; index < count; index++ {
 		go worker(stg, stg.terminateWorker, stg.workerExitted)
 	}
@@ -139,7 +139,7 @@ workerLoop:
 			stg.workerIdle <- struct{}{}
 		}
 	}
-	log.Print("[DEBUG] worker finished: ", stg.methodName)
+	// log.Print("[DEBUG] worker finished: ", stg.methodName)
 	finished <- struct{}{}
 }
 

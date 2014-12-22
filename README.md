@@ -26,25 +26,25 @@ an error prior to commencing the next stage. If the job already has an
 error, then skip following steps.
 
 ```Go
-type silly struct {
-    a, b float64
-    err  error
+type someJob struct {
+	a, b float64
+	err  error
 }
 
-func (self *silly) Add() {
-    if err == nil {
-        self.a += self.b
-    }
+func (self *someJob) Add() {
+	if self.err == nil {
+		self.a += self.b
+	}
 }
 
-func (self *silly) Divide() {
-    if err == nil {
-        if self.b != 0 {
-            self.err = fmt.Errorf("divide by zero")
-        } else {
-            self.a /= self.b
-        }
-    }
+func (self *someJob) Divide() {
+	if self.err == nil {
+		if self.b != 0 {
+			self.err = fmt.Errorf("divide by zero")
+		} else {
+			self.a /= self.b
+		}
+	}
 }
 
 func main() {
@@ -59,11 +59,11 @@ func main() {
     input := queue.Input()
 
     go func() {
-        input <- &silly{a: 13, b: 42}
+        input <- &someJob{a: 13, b: 42}
     }()
 
     v := <- queue.Output()
-    val := v.(*silly)
+    val := v.(*someJob)
 
     if val.err != nil {
         log.Printf("[ERROR] Actual: %#v; Expected: %#v", val.err, nil)
@@ -83,18 +83,18 @@ some sort of side effect, and the completed jobs can be discarded.
 In this example, a job queue sump is created to drain completed jobs.
 
 ```Go
-type silly struct {
+type someJob struct {
     a, b int
     err  error
 }
 
-func (self *silly) Add() {
+func (self *someJob) Add() {
     if err == nil {
         self.a += self.b
     }
 }
 
-func (self *silly) Divide() {
+func (self *someJob) Divide() {
     if err == nil {
         if self.b != 0 {
             self.err = fmt.Errorf("divide by zero")
@@ -104,7 +104,7 @@ func (self *silly) Divide() {
     }
 }
 
-func (self *silly) Print() {
+func (self *someJob) Print() {
     if err == nil {
         fmt.Println("job result: ", self.a)
     } else {
@@ -126,7 +126,7 @@ func main() {
 
     jobSent := make(chan struct{})
     go func() {
-        input <- &silly{a: 13, b: 42}
+        input <- &someJob{a: 13, b: 42}
         jobSent <- struct{}{}
     }()
 
