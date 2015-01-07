@@ -25,7 +25,22 @@ type stage struct {
 	idleTimeout, busyTimeout                   time.Duration
 }
 
+// BusyHook specifies the type of function that is called when the
+// stage monitor notices that a particular stage is busy. It is given
+// the minimum number of workers for this stage, the current number of
+// workers for this stage, and the maximum number of workers for this
+// stage. The return value should be the number of additional workers
+// to spawn. The return value of 0 is interpreted to mean to add no
+// additional workers.
 type BusyHook func(min, count, max int) int
+
+// IdleHook specifies the type of function that is called when the
+// stage monitor notices that one or more workers for a particular
+// stage are idle. It is given the minimum number of workers for this
+// stage, the current number of workers for this stage, and the
+// maximum number of workers for this stage. The return value should
+// be the number of workers to remove from the stage. The return value
+// of 0 is interpreted to mean to remove no workers.
 type IdleHook func(min, count, max int) int
 
 // Stage is a job queue configuration function that appends a job
@@ -224,8 +239,10 @@ func Min(count int) StageSetter {
 	}
 }
 
-// Static is a stage configuration function that specifies the static
-// number of workers a stage ought to have.
+// Static is a stage configuration function that specifies the number
+// of workers a stage ought to have. Calling this function is
+// equivalent to calling both the Min and Max functions with the same
+// argument.
 func Static(count int) StageSetter {
 	return func(stg *stage) error {
 		if count <= 0 {
@@ -239,18 +256,18 @@ func Static(count int) StageSetter {
 
 // Busy is a stage configuration function that specifies what BusyHook
 // function to invoke when workers are busy.
-func Busy(hook BusyHook) StageSetter {
+func Busy(someHookFunction BusyHook) StageSetter {
 	return func(stg *stage) error {
-		stg.busyHook = hook
+		stg.busyHook = someHookFunction
 		return nil
 	}
 }
 
 // Idle is a stage configuration function that specifies what IdleHook
 // function to invoke when workers are idle.
-func Idle(hook IdleHook) StageSetter {
+func Idle(someHookFunction IdleHook) StageSetter {
 	return func(stg *stage) error {
-		stg.idleHook = hook
+		stg.idleHook = someHookFunction
 		return nil
 	}
 }
