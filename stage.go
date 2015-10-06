@@ -82,7 +82,7 @@ func Stage(setters ...StageSetter) JobQueueSetter {
 		}
 		if stg.idleHook == nil {
 			log.Printf("setting idle hook to default of remove one worker when idle")
-			stg.busyHook = func(_, _, _ int) int {
+			stg.idleHook = func(_, _, _ int) int {
 				return 1
 			}
 		}
