@@ -15,7 +15,7 @@ another stage you may want between 25 and 50.
 
 This library, go concurent job queues, gocjq, makes setting up these
 sort of examples quite easy. There are two interfaces, namely an
-enqueue and dequeue fascility,
+enqueue and dequeue facility.
 
 ## Examples
 
